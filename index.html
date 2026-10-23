@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>Калькуляция туров</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#eef2f3;--card:#fff;--ink:#1d2b30;--mut:#627278;--acc:#1f5b6e;--line:#d3dcdf;--warn:#b4552d;--hl:#e4f0f3}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 system-ui,Segoe UI,sans-serif}
+header{background:var(--acc);color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+header b{font-size:16px;margin-right:8px}header input,header select{width:auto}
+main{display:grid;grid-template-columns:minmax(560px,1.15fr) minmax(420px,1fr);gap:14px;padding:14px;align-items:start}
+@media(max-width:1000px){main{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px}
+h2{font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between}h2 span{font-weight:400;color:var(--mut)}
+input,select,button{font:inherit;color:inherit}
+input,select{border:1px solid var(--line);border-radius:5px;padding:4px 6px;background:#fff;width:100%;min-width:0}
+button{border:1px solid var(--acc);background:#fff;color:var(--acc);border-radius:5px;padding:4px 10px;cursor:pointer}
+button.p{background:var(--acc);color:#fff}button.d{border-color:var(--warn);color:var(--warn);padding:4px 8px}
+header button{border-color:#fff;background:transparent;color:#fff}
+:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+table{border-collapse:collapse;width:100%}th{font-weight:600;text-align:left;color:var(--mut);padding:2px 4px;font-size:12px}
+td{padding:2px 3px}td.x{width:34px}.r{text-align:right}
+.g{display:grid;gap:8px;grid-template-columns:repeat(4,1fr);align-items:end}.g label{font-size:12px;color:var(--mut)}
+.mut{color:var(--mut);font-size:12px}.tot{font-weight:600;background:var(--hl)}
+#res{position:sticky;top:8px;max-height:calc(100vh - 16px);overflow:auto}
+#res table td,#res table th{padding:3px 6px}#res tr:nth-child(even) td{background:#f6f9fa}#res .b{font-weight:700}
+#res tr.q td{background:var(--hl)}
+pre{background:#f6f9fa;border:1px solid var(--line);border-radius:6px;padding:8px;margin:6px 0;white-space:pre-wrap;font:13px/1.4 ui-monospace,Consolas,monospace}
+details summary{cursor:pointer;font-weight:600}
+</style></head><body>
+<header><b>Калькуляция туров</b>
+ <button onclick="newCalc()">Новый</button>
+ <select id="sv" onchange="" ><option value="">— сохранённые расчёты —</option></select>
+ <button onclick="openSaved()">Открыть</button><button onclick="saveAs()">Сохранить как…</button><button onclick="delSaved()">Удалить</button>
+ <button onclick="exportJ()">Экспорт файла</button><button onclick="$('imp').click()">Импорт файла</button>
+ <input type="file" id="imp" accept=".json" hidden onchange="importJ(this)">
+</header>
+<main><div id="form"></div><div><section id="res"></section></div></main>
+<script>
+//ENGINE_START
+const rnd=x=>Math.sign(x)*Math.round(Math.abs(x)+1e-9);
+function ev(s){if(s==null)return 0;if(typeof s==='number')return s;s=String(s).replace(/,/g,'.').trim();if(!s)return 0;
+ if(!/^[\d+\-*/().\s]+$/.test(s))return NaN;try{const v=Function('"use strict";return ('+s+')')();return isFinite(v)?v:NaN}catch(e){return NaN}}
+const N=x=>{const v=ev(x);return isNaN(v)?0:v};
+const sumNC=l=>l.reduce((a,r)=>a+N(r.n)*N(r.c),0);
+function calc(S){
+ const H=Object.fromEntries(S.hotels.map(h=>[h.id,h]));let sa=0,da=0;
+ S.acc.forEach(r=>{const h=H[r.h];if(h){sa+=N(r.nights)*N(h.sng);da+=N(r.nights)*N(h.dbl)}});
+ const meals=sumNC(S.meals),guides=sumNC(S.guides),tix=sumNC(S.tickets),other=sumNC(S.other);
+ const veh={};['sedan','van','coster','bus'].forEach(k=>veh[k]=S.transport.reduce((a,r)=>a+N(r[k]),0));
+ const lead=N(S.leader.n)*N(S.leader.c),focAuto=sa+meals+tix+other;
+ const focC=(S.foc.c===''||S.foc.c==null)?focAuto:N(S.foc.c),foc=N(S.foc.n)*focC,misc=N(S.misc.n)*N(S.misc.c);
+ const mk=1+N(S.markup)/100;
+ const tr=n=>{for(const v of S.vehicles)if(n>=N(v.from)&&n<=N(v.to))return veh[v.key];return 0};
+ const vr=n=>(n%2?sa:da/2)+meals+tix+other;
+ const fx=n=>tr(n)+guides+(n>=N(S.th.leader)?lead:0)+(n>=N(S.th.foc)?foc:0)+(n>=N(S.th.misc)?misc:0);
+ const rows=[];
+ for(let n=1;n<=N(S.maxPax);n++){
+  const f=fx(n),fpp=rnd(f/n),r={n,fx:f,fpp};
+  if(n%2===0){r.v=vr(n);r.cd=r.v+fpp}
+  else{r.vs=vr(n);r.cs=r.vs+fpp;if(n>1){r.v=vr(n-1);r.cd=r.v+fpp}}
+  r.pd=r.cd!=null?rnd(r.cd*mk):null;r.ps=r.cs!=null?rnd(r.cs*mk):null;rows.push(r)}
+ return{rows,sa,da,meals,guides,tix,other,veh,lead,foc,focC,misc}}
+//ENGINE_END
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const fm=v=>v==null?'':String(+v.toFixed(2));
+const HOT=[["TAS comfort",160,190],["TAS standard",115,140],["TAS economy",80,100],["TAS LUXE",260,300],["SKD comfort",135,180],["SKD DELUXE",180,210],["SKD standard",95,130],["SKD economy",80,100],["BHK comfort",110,150],["BHK LUXE",180,210],["BHK standard",90,120],["BHK economy",75,95],["KHV DELUXE",100,145],["KHV standard",85,110],["KHV economy",70,90],["Ferghana",90,130],["Nukus",80,105],["Nurata village homestays",60,120],["Yurt camp",100,190]];
+const R3=()=>({l:'',n:'',c:''});
+const blank=()=>({name:'',markup:0,maxPax:45,qn:2,qs:3,hotels:HOT.map((h,i)=>({id:i+1,name:h[0],sng:h[1],dbl:h[2]})),
+ acc:[{h:1,nights:''}],meals:[R3()],guides:[R3()],tickets:[R3()],other:[R3()],transport:[{l:'',sedan:'',van:'',coster:'',bus:''}],
+ leader:{n:'',c:''},foc:{n:'',c:''},misc:{n:'',c:''},th:{leader:6,foc:10,misc:8},
+ vehicles:[{key:'sedan',from:1,to:2},{key:'van',from:3,to:8},{key:'coster',from:9,to:13},{key:'bus',from:14,to:27}]});
+let S;try{S=JSON.parse(localStorage.getItem('tc_cur'))}catch(e){}S=S||blank();
+const persist=()=>{try{localStorage.setItem('tc_cur',JSON.stringify(S))}catch(e){}};
+const ref=(p)=>{const k=p.split('.');let o=S;for(let i=0;i<k.length-1;i++)o=o[k[i]];return[o,k[k.length-1]]};
+function setv(p,v){const[o,k]=ref(p);o[k]=v;persist();out()}
+function add(key){S[key].push(key==='acc'?{h:S.hotels[0]?.id,nights:''}:key==='transport'?{l:'',sedan:'',van:'',coster:'',bus:''}:key==='hotels'?{id:Math.max(0,...S.hotels.map(h=>h.id))+1,name:'',sng:'',dbl:''}:R3());persist();render()}
+function del(key,i){S[key].splice(i,1);persist();render()}
+const I=(p,v,ph='',cls='')=>`<input value="${esc(v)}" placeholder="${ph}" class="${cls}" oninput="setv('${p}',this.value)">`;
+const X=(k,i)=>`<td class="x"><button class="d" onclick="del('${k}',${i})" title="Удалить">×</button></td>`;
+function trio(key,title,labelPh){
+ return`<section><h2>${title}<span id="t_${key}"></span></h2><table><tr><th>Описание</th><th style="width:70px">Кол-во</th><th style="width:90px">Цена</th><th class="r" style="width:80px">Итого</th><th></th></tr>`+
+ S[key].map((r,i)=>`<tr><td>${I(key+'.'+i+'.l',r.l,labelPh)}</td><td>${I(key+'.'+i+'.n',r.n)}</td><td>${I(key+'.'+i+'.c',r.c)}</td><td class="r" id="${key}_${i}"></td>${X(key,i)}</tr>`).join('')+
+ `</table><button onclick="add('${key}')" style="margin-top:6px">+ строка</button></section>`}
+function render(){
+ const hs=S.hotels.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
+ let h=`<section><div class="g"><div style="grid-column:span 2"><label>Название группы / клиента</label>${I('name',S.name)}</div>
+ <div><label>Наценка, %</label>${I('markup',S.markup)}</div><div><label>Макс. размер группы</label>${I('maxPax',S.maxPax)}</div></div>
+ <div class="mut" style="margin-top:6px">В цены можно вводить выражения, как в Excel: 90+250. Наценка 10 означает +10%.</div></section>`;
+ h+=`<section><h2>Проживание<span>на 1 чел.: sng <b id="a_s"></b> / dbl за номер <b id="a_d"></b></span></h2><table><tr><th>Отель</th><th style="width:80px">Ночей</th><th class="r" style="width:70px">Sng</th><th class="r" style="width:70px">Dbl</th><th></th></tr>`+
+ S.acc.map((r,i)=>`<tr><td><select onchange="setv('acc.${i}.h',+this.value)">${hs.replace(`value="${r.h}"`,`value="${r.h}" selected`)}</select></td><td>${I('acc.'+i+'.nights',r.nights)}</td><td class="r" id="as_${i}"></td><td class="r" id="ad_${i}"></td>${X('acc',i)}</tr>`).join('')+
+ `</table><button onclick="add('acc')" style="margin:6px 0">+ отель</button>
+ <details><summary>Список отелей и цен (лист Data)</summary><table><tr><th>Название</th><th style="width:70px">Sng</th><th style="width:70px">Dbl (номер)</th><th></th></tr>`+
+ S.hotels.map((x,i)=>`<tr><td>${I('hotels.'+i+'.name',x.name)}</td><td>${I('hotels.'+i+'.sng',x.sng)}</td><td>${I('hotels.'+i+'.dbl',x.dbl)}</td>${X('hotels',i)}</tr>`).join('')+
+ `</table><button onclick="add('hotels')" style="margin-top:6px">+ отель в список</button> <span class="mut">После правки названий выберите отель в строке заново.</span></details></section>`;
+ h+=trio('meals','Питание (на 1 чел.)','Описание')+trio('tickets','Входные билеты (на 1 чел.)','Описание')+trio('other','Прочие переменные расходы (на 1 чел.): авиа, ж/д, вода…','Flight, Train, Water');
+ h+=trio('guides','Местные гиды (на группу)','Описание');
+ h+=`<section><h2>Транспорт (на группу)<span>итог по типам авто</span></h2><table><tr><th>Маршрут</th><th style="width:70px">Sedan</th><th style="width:70px">VAN</th><th style="width:70px">Coster</th><th style="width:70px">Bus</th><th></th></tr>`+
+ S.transport.map((r,i)=>`<tr><td>${I('transport.'+i+'.l',r.l,'12.12.2026, Day 1: Tashkent')}</td>`+['sedan','van','coster','bus'].map(k=>`<td>${I('transport.'+i+'.'+k,r[k])}</td>`).join('')+X('transport',i)+'</tr>').join('')+
+ `<tr class="tot"><td>Итого</td>`+['sedan','van','coster','bus'].map(k=>`<td class="r" id="v_${k}"></td>`).join('')+`<td></td></tr></table><button onclick="add('transport')" style="margin-top:6px">+ строка</button>
+ <div class="mut" style="margin:8px 0 4px">Какой автомобиль для каких размеров группы (в Excel: Sedan 1–2, VAN 3–8, Coster 9–13, Bus 14–27; для групп больше 27 транспорт не учитывается):</div>
+ <table>`+S.vehicles.map((v,i)=>`<tr><td style="width:90px"><b>${v.key}</b></td><td>от ${I('vehicles.'+i+'.from',v.from)}</td><td>до ${I('vehicles.'+i+'.to',v.to)}</td></tr>`).join('')+`</table></section>`;
+ h+=`<section><h2>Фиксированные расходы на группу</h2><table><tr><th></th><th style="width:70px">Кол-во</th><th style="width:90px">Цена</th><th style="width:100px">С группы от, чел.</th><th class="r" style="width:80px">Итого</th></tr>
+ <tr><td>Tour leader (все дни)</td><td>${I('leader.n',S.leader.n)}</td><td>${I('leader.c',S.leader.c)}</td><td>${I('th.leader',S.th.leader)}</td><td class="r" id="f_l"></td></tr>
+ <tr><td>FOC (+1)</td><td>${I('foc.n',S.foc.n)}</td><td>${I('foc.c',S.foc.c,'авто')}</td><td>${I('th.foc',S.th.foc)}</td><td class="r" id="f_f"></td></tr>
+ <tr><td>Miscellaneous</td><td>${I('misc.n',S.misc.n)}</td><td>${I('misc.c',S.misc.c)}</td><td>${I('th.misc',S.th.misc)}</td><td class="r" id="f_m"></td></tr></table>
+ <div class="mut" style="margin-top:6px">Цена FOC, если пусто, считается как в Excel: sng-отель + питание + билеты + прочие переменные расходы на 1 чел.</div></section>`;
+ $('form').innerHTML=h;refreshSaved();out()}
+function out(){
+ const C=calc(S),H=Object.fromEntries(S.hotels.map(h=>[h.id,h])),T=(id,v)=>{const e=$(id);if(e)e.textContent=v};
+ T('a_s',fm(C.sa));T('a_d',fm(C.da));
+ S.acc.forEach((r,i)=>{const h=H[r.h];T('as_'+i,h?fm(N(r.nights)*N(h.sng)):'');T('ad_'+i,h?fm(N(r.nights)*N(h.dbl)):'')});
+ ['meals','tickets','other','guides'].forEach(k=>{S[k].forEach((r,i)=>T(k+'_'+i,r.c===''?'':fm(N(r.n)*N(r.c))));T('t_'+k,'итого '+fm(C[k==='tickets'?'tix':k]))});
+ ['sedan','van','coster','bus'].forEach(k=>T('v_'+k,fm(C.veh[k])));
+ T('f_l',fm(C.lead));T('f_f',fm(C.foc));T('f_m',fm(C.misc));
+ const bad=[];const chk=o=>{for(const k in o){const v=o[k];if(v&&typeof v==='object')chk(v);else if(typeof v==='string'&&v.trim()&&isNaN(ev(v))&&!['name','l','label'].includes(k))bad.push(v)}};
+ ['meals','tickets','other','guides','transport','leader','foc','misc','acc'].forEach(k=>chk(S[k]));
+ const rp=n=>C.rows[n-1],qd=rp(N(S.qn)),qs=rp(N(S.qs));
+ const pp=qd&&qd.pd!=null?qd.pd+' USD PP':'—',ss=qs&&qs.ps!=null&&qs.pd!=null?(qs.ps-qs.pd)+' USD SINGLE SUP':'—';
+ let h=`<h2>Результат${S.name?' — '+esc(S.name):''}</h2>`+(bad.length?`<div style="color:var(--warn)">Не удалось прочитать: ${esc(bad.join(', '))}</div>`:'')+
+ `<div class="g" style="grid-template-columns:1fr 1fr;margin-bottom:6px"><div><label>Размер группы для цены</label><input value="${esc(S.qn)}" oninput="setv('qn',this.value)"></div><div><label>Single supplement при группе</label><input value="${esc(S.qs)}" oninput="setv('qs',this.value)"></div></div>
+ <pre id="qt">${pp}\n${ss}</pre><button class="p" onclick="cp('qt')">Копировать</button>
+ <div class="mut" style="margin:8px 0 4px">Цена = (переменные расходы + постоянные на чел.) × наценка. Single supplement = цена sng − цена dbl при нечётной группе (в Excel: 3 чел.).</div>
+ <table><tr><th>Чел.</th><th class="r">Перем.</th><th class="r">Пост./чел.</th><th class="r">Себест. dbl</th><th class="r b">Цена dbl</th><th class="r">Себест. sng</th><th class="r b">Цена sng</th></tr>`+
+ C.rows.map(r=>`<tr class="${r.n==N(S.qn)?'q':''}"><td>${r.n}</td><td class="r">${fm(r.v??r.vs)}</td><td class="r">${r.fpp}</td><td class="r">${fm(r.cd)}</td><td class="r b">${fm(r.pd)}</td><td class="r">${fm(r.cs)}</td><td class="r b">${fm(r.ps)}</td></tr>`).join('')+`</table>`;
+ $('res').innerHTML=h}
+function cp(id){const r=document.createRange();r.selectNodeContents($(id));const s=getSelection();s.removeAllRanges();s.addRange(r);try{document.execCommand('copy')}catch(e){}s.removeAllRanges()}
+const lst=()=>{try{return JSON.parse(localStorage.getItem('tc_list'))||{}}catch(e){return{}}};
+function refreshSaved(){$('sv').innerHTML='<option value="">— сохранённые расчёты —</option>'+Object.keys(lst()).map(k=>`<option>${esc(k)}</option>`).join('')}
+function saveAs(){const n=prompt('Название расчёта',S.name||'');if(!n)return;const l=lst();l[n]=S;try{localStorage.setItem('tc_list',JSON.stringify(l))}catch(e){}S.name=S.name||n;persist();refreshSaved();$('sv').value=n}
+function openSaved(){const k=$('sv').value,l=lst();if(k&&l[k]){S=JSON.parse(JSON.stringify(l[k]));persist();render()}}
+function delSaved(){const k=$('sv').value,l=lst();if(k&&confirm('Удалить «'+k+'»?')){delete l[k];localStorage.setItem('tc_list',JSON.stringify(l));refreshSaved()}}
+function newCalc(){if(confirm('Начать новый расчёт? Текущий несохранённый расчёт будет потерян.')){S=blank();persist();render()}}
+function exportJ(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download=(S.name||'calc').replace(/[^\w\-]+/g,'_')+'.json';a.click()}
+function importJ(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);if(!o.hotels||!o.acc)throw 0;S=o;persist();render()}catch(e){alert('Это не файл расчёта')}};r.readAsText(f);i.value=''}
+render();
+</script></body></html>
